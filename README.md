@@ -1,0 +1,3 @@
+```
+/gemini add readme
+```
