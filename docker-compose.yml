@@ -1,0 +1,82 @@
+version: '3.8'
+services:
+  website-analyzer:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: website-analyzer
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DISPLAY=:99
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-vision-preview}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-02-01}
+      - AZURE_OPENAI_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT_NAME}
+      - BROWSER_HEADLESS=${BROWSER_HEADLESS:-true}
+      - BROWSER_TIMEOUT=${BROWSER_TIMEOUT:-30}
+      - MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS:-5}
+      - RATE_LIMIT_DELAY=${RATE_LIMIT_DELAY:-1}
+    volumes:
+      - ./website_analyzer/reports:/app/reports
+      - ./website_analyzer/logs:/app/logs
+      - ./website_analyzer/config:/app/config
+      - ./website_analyzer/templates:/app/templates
+      - browser-cache:/home/appuser/.cache
+    working_dir: /app
+    command: tail -f /dev/null
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - seccomp:unconfined
+    shm_size: 2G
+  redis:
+    image: redis:7-alpine
+    container_name: website-analyzer-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+  nginx:
+    image: nginx:alpine
+    container_name: website-analyzer-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./website_analyzer/reports:/usr/share/nginx/html/reports:ro
+      - ./website_analyzer/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - website-analyzer
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 32M
+          cpus: '0.1'
+volumes:
+  browser-cache:
+    driver: local
+  redis-data:
+    driver: local
+networks:
+  default:
+    name: website-analyzer-network
