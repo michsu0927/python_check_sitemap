@@ -15,10 +15,15 @@ def main() -> None:
     parser.add_argument("url", help="Base URL of the website")
     args = parser.parse_args()
 
-    sp = SitemapParser(args.url)
-    entries = sp.parse()
-    for e in entries:
-        print(e.url)
+    try:
+        sp = SitemapParser(args.url)
+        entries = sp.parse()
+        for e in entries:
+            print(e.url)
+    except requests.RequestException as rexc:
+        logging.error(f"A network error occurred while processing {args.url}: {rexc}")
+    except Exception as exc:
+        logging.error(f"An unexpected error occurred while processing {args.url}: {exc}")
 
 
 if __name__ == "__main__":
