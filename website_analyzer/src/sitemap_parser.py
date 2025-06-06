@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 import requests
 from urllib.parse import urljoin, urlparse
+from urllib import robotparser
 from bs4 import BeautifulSoup
 from typing import List, Dict, Set, Optional, Tuple
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ class SitemapParser:
         self.session: Optional[aiohttp.ClientSession] = None
         self.parsed_sitemaps: Set[str] = set()
         self.all_urls: List[URLInfo] = []
+        self.robots_parser: Optional[robotparser.RobotFileParser] = None
         
     async def __aenter__(self):
         """異步上下文管理器進入"""
@@ -75,6 +77,26 @@ class SitemapParser:
         """取得域名"""
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}"
+
+    def _extract_path(self, url: str) -> str:
+        """從 URL 提取路徑與查詢字串"""
+        parsed = urlparse(url)
+        path = parsed.path or '/'
+        if parsed.query:
+            path += '?' + parsed.query
+        return path
+
+    def _is_url_allowed(self, url: str) -> bool:
+        """檢查 URL 是否被 robots.txt 允許"""
+        if not self.robots_parser:
+            return True
+
+        try:
+            path = self._extract_path(url)
+            return self.robots_parser.can_fetch('*', path)
+        except Exception as e:
+            logger.debug(f"robots.txt 檢查失敗 {url}: {e}")
+            return True
     
     def _discover_sitemap_urls(self, domain: str) -> List[str]:
         """發現可能的 sitemap URL"""
@@ -202,10 +224,15 @@ class SitemapParser:
         """檢查 robots.txt 中的 sitemap 聲明"""
         robots_url = urljoin(domain, '/robots.txt')
         sitemaps = []
-        
+        self.robots_parser = None
+
         try:
             content = await self._fetch_content(robots_url)
             if content:
+                # parse robots rules
+                self.robots_parser = robotparser.RobotFileParser()
+                self.robots_parser.parse(content.splitlines())
+
                 for line in content.split('\n'):
                     line = line.strip()
                     if line.lower().startswith('sitemap:'):
@@ -215,7 +242,7 @@ class SitemapParser:
                             logger.info(f"從 robots.txt 發現 sitemap: {sitemap_url}")
         except Exception as e:
             logger.debug(f"無法讀取 robots.txt {robots_url}: {e}")
-        
+
         return sitemaps
     
     async def parse_website(self, website_url: str, max_depth: int = 3) -> List[URLInfo]:
@@ -315,9 +342,13 @@ class SitemapParser:
         
         for url_info in urls:
             parsed_url = urlparse(url_info.url)
-            
+
             # 只保留同域名的 URL
             if parsed_url.netloc != domain_netloc:
+                continue
+
+            # robots.txt 規則檢查
+            if not self._is_url_allowed(url_info.url):
                 continue
             
             # 排除特定副檔名
