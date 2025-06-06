@@ -14,7 +14,7 @@ cd website_analyzer
 # 2. 建立虛擬環境
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
-# 或 `venv\Scriptsctivate`  # Windows
+# 或 `venv\Scripts\activate`  # Windows
 
 # 3. 安裝依賴
 pip install -r requirements.txt
@@ -219,4 +219,3 @@ DB_PASSWORD=secure_password
 
 ## 授權
 本專案採用 MIT 授權 - 詳情請參閱 [LICENSE](LICENSE) 檔案。
-```
