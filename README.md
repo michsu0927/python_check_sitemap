@@ -3,9 +3,9 @@
 # Automated Website Analysis System
 
 ## Project Overview
-Development of an automated system capable of parsing website sitemaps, using browser-use for automated browser operations to inspect web pages, and generating analysis reports by analyzing screenshots with GPT.
-Focus on implementing core functional modules, testing is not required.
-Docker-related files are to be created, but container creation and execution will be handled manually by the developer.
+This project builds an automated system that parses website sitemaps, uses browser-use to visit pages automatically, and analyzes screenshots with GPT to produce reports.
+The focus is on building the core modules; no tests are required.
+Docker files are provided, but you need to build and run containers manually.
 
 ## Quick Start (Local Development)
 ```bash
@@ -64,7 +64,7 @@ python src/main.py --url https://example.com
 - Supports nested sitemaps and sitemap indexes.
 - Filters and categorizes different types of pages.
 
-### Module 2: Browser-Use Automation Detector (`browser_automation.py`)
+### Module 2: Browser-Use Automation Module (`browser_automation.py`)
 - Uses browser-use (based on Playwright) for browser automation.
 - Performs page screenshots and basic interaction tests.
 - Collects page performance and usability data.
