@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 import json
 from datetime import datetime
 
-from src.config_manager import ConfigManager
+from src.config_manager import config_manager
 from src.sitemap_parser import SitemapParser
 from src.browser_automation import BrowserAutomation
 from src.gpt_analyzer import GPTAnalyzer
@@ -26,20 +26,23 @@ class WebsiteAnalyzer:
     
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the website analyzer."""
-        self.config_manager = ConfigManager(config_path)
-        self.sitemap_parser = SitemapParser(self.config_manager)
-        self.browser_automation = BrowserAutomation(self.config_manager)
-        self.gpt_analyzer = GPTAnalyzer(self.config_manager)
-        self.report_generator = ReportGenerator(self.config_manager)
-        
-        # Setup enhanced logging
+        # ConfigManager is a singleton, configuration path is currently ignored
+        self.config_manager = config_manager
+
+        # Core components
+        self.sitemap_parser = SitemapParser()
+        self.browser_automation = BrowserAutomation()
+        self.gpt_analyzer = GPTAnalyzer()
+        self.report_generator = ReportGenerator()
+
+        # Setup enhanced logging with default configuration
         self._setup_logging()
-        self.logger = get_logger(__name__, self.config_manager.get_logging_config().__dict__)
+        self.logger = get_logger(__name__)
         
     def _setup_logging(self):
         """Setup logging configuration."""
-        log_config = self.config_manager.get_logging_config()
-        setup_root_logger(log_config.__dict__)
+        # Use default logging configuration from logging_utils
+        setup_root_logger({})
         
     async def analyze_website(
         self,
@@ -67,31 +70,40 @@ class WebsiteAnalyzer:
         try:
             # Step 1: Parse sitemap and discover URLs
             self.logger.logger.info("Step 1: Parsing sitemap and discovering URLs")
-            urls = await self.sitemap_parser.parse_sitemap(url)
-            
+            async with SitemapParser() as parser:
+                url_infos = await parser.parse_website(url)
+            urls = [u.url for u in url_infos]
+
             if max_pages:
                 urls = urls[:max_pages]
-                
+
             self.logger.logger.info(f"Found {len(urls)} URLs to analyze")
-            
+
             # Step 2: Browser automation - capture screenshots and collect data
             self.logger.logger.info("Step 2: Capturing screenshots and collecting browser data")
-            browser_results = await self.browser_automation.process_urls(urls)
-            
+            async with BrowserAutomation() as browser:
+                browser_results = await browser.analyze_pages_comprehensive(urls)
+
+            screenshots = browser_results.get("screenshots", [])
+
             # Step 3: GPT Vision Analysis
             self.logger.logger.info("Step 3: Performing GPT vision analysis")
-            analysis_results = await self.gpt_analyzer.analyze_batch(browser_results)
-            
+            async with GPTAnalyzer() as analyzer:
+                analysis_results = await analyzer.analyze_screenshots_batch(screenshots)
+
             # Step 4: Generate comprehensive report
             self.logger.logger.info("Step 4: Generating analysis report")
             if not output_dir:
                 output_dir = f"reports/{self._sanitize_url(url)}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                
-            report_path = await self.report_generator.generate_report(
+
+            reports = self.report_generator.generate_comprehensive_report(
                 analysis_results,
-                output_dir,
-                report_format
+                screenshots,
+                browser_results.get("performance_metrics"),
+                browser_results.get("interaction_results"),
+                formats=[report_format]
             )
+            report_path = reports.get(report_format)
             
             # Compile final results
             end_time = datetime.now()
@@ -159,13 +171,6 @@ class WebsiteAnalyzer:
                 self.logger.error(f"Failed to analyze {url}: {str(e)}")
                 errors[url] = str(e)
                 
-        # Generate batch summary report
-        if output_dir:
-            batch_report_path = Path(output_dir) / "batch_summary.html"
-            await self.report_generator.generate_batch_report(
-                results, errors, batch_report_path
-            )
-            
         return {
             'successful': results,
             'failed': errors,
@@ -178,41 +183,14 @@ class WebsiteAnalyzer:
         """Sanitize URL for use in file names."""
         return url.replace('https://', '').replace('http://', '').replace('/', '_').replace(':', '_')
         
-    def _generate_summary(self, analysis_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _generate_summary(self, analysis_results: List[Any]) -> Dict[str, Any]:
         """Generate summary statistics from analysis results."""
         if not analysis_results:
             return {}
-            
-        total_pages = len(analysis_results)
-        
-        # Calculate average scores
-        avg_scores = {}
-        score_categories = ['visual_design', 'user_experience', 'technical_quality', 'content_quality']
-        
-        for category in score_categories:
-            scores = [
-                result.get('analysis', {}).get('scores', {}).get(category, 0)
-                for result in analysis_results
-            ]
-            avg_scores[category] = sum(scores) / len(scores) if scores else 0
-            
-        # Calculate overall average
-        overall_avg = sum(avg_scores.values()) / len(avg_scores) if avg_scores else 0
-        
-        # Performance metrics
-        load_times = [
-            result.get('performance_metrics', {}).get('load_time', 0)
-            for result in analysis_results
-        ]
-        avg_load_time = sum(load_times) / len(load_times) if load_times else 0
-        
-        return {
-            'total_pages': total_pages,
-            'average_scores': avg_scores,
-            'overall_average': overall_avg,
-            'average_load_time': avg_load_time,
-            'performance_grade': self._calculate_performance_grade(overall_avg)
-        }
+
+        analyzer = GPTAnalyzer()
+        aggregates = analyzer.calculate_aggregate_scores(analysis_results)
+        return aggregates.get('summary', {})
         
     def _calculate_performance_grade(self, score: float) -> str:
         """Calculate performance grade based on average score."""
@@ -329,7 +307,6 @@ Examples:
             print("="*60)
             
         elif args.command == 'validate-config':
-            config_manager = ConfigManager(getattr(args, 'config', None))
             if config_manager.validate_config():
                 print("✓ Configuration is valid")
             else:
