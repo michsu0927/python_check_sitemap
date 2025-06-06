@@ -91,7 +91,13 @@ class SitemapParser:
         try:
             resp = self.session.get(robots_url, timeout=self.timeout)
             if resp.status_code == 200:
-                self._robots_rules = [line.split(":", 1)[1].strip() for line in resp.text.splitlines() if line.lower().startswith("disallow:")]
+                rules: List[str] = []
+                for line in resp.text.splitlines():
+                    if line.lower().startswith("disallow:"):
+                        rule = line.split(":", 1)[1].strip()
+                        if rule:
+                            rules.append(rule)
+                self._robots_rules = rules
             else:
                 self._robots_rules = []
         except requests.RequestException:
