@@ -33,6 +33,7 @@ class SitemapParser:
     visited: Set[str] = field(default_factory=set)
     max_retries: int = 3
     timeout: int = 10
+    _cached_robots_rules: List[str] | None = field(default=None, init=False, repr=False) # Explicitly declare cache for robots.txt rules
 
     def fetch(self, url: str) -> str:
         """Fetch XML content from the given URL with retries."""
