@@ -1,0 +1,2 @@
+openai_model: gpt-4-vision
+request_timeout: 10
