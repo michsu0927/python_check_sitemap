@@ -95,7 +95,7 @@ class SitemapParser:
             path = self._extract_path(url)
             return self.robots_parser.can_fetch('*', path)
         except Exception as e:
-            logger.debug(f"robots.txt 檢查失敗 {url}: {e}")
+            logger.warning(f"robots.txt 檢查失敗，將預設允許 {url}: {e}") # Log as warning
             return True
     
     def _discover_sitemap_urls(self, domain: str) -> List[str]:
